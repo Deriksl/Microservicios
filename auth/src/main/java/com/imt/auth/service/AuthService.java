@@ -3,16 +3,20 @@ package com.imt.auth.service;
 import com.imt.auth.dto.LoginRequest;
 import com.imt.auth.dto.RegisterRequest;
 import com.imt.auth.dto.TokenResponse;
-import com.imt.auth.usuarios.User;
 import com.imt.auth.repository.UserRepository;
+import com.imt.auth.usuarios.User;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AuthService {
 
     private final UserRepository userRepository;
@@ -22,34 +26,35 @@ public class AuthService {
 
     public TokenResponse register(RegisterRequest request) {
         var user = User.builder()
-                .name(request.getName())
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .build();
 
-        var savedUser = userRepository.save(user);
-        var jwtToken = jwtService.generateToken(user);
-
+        userRepository.save(user);
         return TokenResponse.builder()
-                .accessToken(jwtToken)
+                .accessToken(jwtService.generateToken(user))
                 .build();
     }
 
     public TokenResponse login(LoginRequest request) {
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        request.getEmail(),
-                        request.getPassword()
-                )
-        );
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            request.getEmail(),
+                            request.getPassword()
+                    )
+            );
 
-        var user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow();
+            var user = userRepository.findByEmail(request.getEmail())
+                    .orElseThrow();
 
-        var jwtToken = jwtService.generateToken(user);
+            return TokenResponse.builder()
+                    .accessToken(jwtService.generateToken(user))
+                    .build();
 
-        return TokenResponse.builder()
-                .accessToken(jwtToken)
-                .build();
+        } catch (AuthenticationException e) {
+            log.error("Authentication failed for: " + request.getEmail(), e);
+            throw new BadCredentialsException("Invalid credentials");
+        }
     }
 }

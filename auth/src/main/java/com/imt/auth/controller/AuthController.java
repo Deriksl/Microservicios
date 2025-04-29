@@ -13,25 +13,22 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/auth")  // Cambiado a /auth
 @RequiredArgsConstructor
 @Tag(name = "Authentication", description = "Authentication API")
 public class AuthController {
 
     private final AuthService service;
 
-    @Operation(summary = "Register new user")
-    @ApiResponse(responseCode = "200", description = "User registered successfully")
-    @PostMapping("/register")
-    public ResponseEntity<TokenResponse> register(@Valid @RequestBody RegisterRequest request) {
-        return ResponseEntity.ok(service.register(request));
-    }
-
-    @Operation(summary = "Authenticate user")
-    @ApiResponse(responseCode = "200", description = "Login successful")
-    @ApiResponse(responseCode = "401", description = "Invalid credentials")
     @PostMapping("/login")
+    @Operation(summary = "Authenticate user")
     public ResponseEntity<TokenResponse> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(service.login(request));
+    }
+
+    @PostMapping("/register")
+    @Operation(summary = "Register new user")
+    public ResponseEntity<TokenResponse> register(@Valid @RequestBody RegisterRequest request) {
+        return ResponseEntity.ok(service.register(request));
     }
 }
