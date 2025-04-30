@@ -1,11 +1,14 @@
 package com.imt.auth.service;
 
 import com.imt.auth.config.JwtProperties;
+import com.imt.auth.repository.TokenRepository;
 import com.imt.auth.usuarios.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
+import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
@@ -16,13 +19,11 @@ import java.util.Map;
 import java.util.function.Function;
 
 @Service
+@RequiredArgsConstructor
 public class JwtService {
 
     private final JwtProperties jwtProperties;
-
-    public JwtService(JwtProperties jwtProperties) {
-        this.jwtProperties = jwtProperties;
-    }
+    private final TokenRepository tokenRepository;
 
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
@@ -41,10 +42,6 @@ public class JwtService {
         return buildToken(extraClaims, userDetails, jwtProperties.expiration());
     }
 
-    public String generateRefreshToken(UserDetails userDetails) {
-        return buildToken(new HashMap<>(), userDetails, jwtProperties.refreshExpiration());
-    }
-
     private String buildToken(Map<String, Object> extraClaims, UserDetails userDetails, long expiration) {
         return Jwts.builder()
                 .claims(extraClaims)
@@ -53,6 +50,32 @@ public class JwtService {
                 .expiration(new Date(System.currentTimeMillis() + expiration))
                 .signWith(getSignInKey())
                 .compact();
+    }
+
+    @Transactional
+    public void saveUserToken(User user, String jwtToken) {
+        var token = com.imt.auth.repository.Token.builder()
+                .user(user)
+                .token(jwtToken)
+                .tokenType(com.imt.auth.repository.Token.TokenType.BEARER)
+                .expired(false)
+                .revoked(false)
+                .createdAt(new Date())
+                .build();
+        tokenRepository.save(token);
+    }
+
+    @Transactional
+    public void revokeAllUserTokens(User user) {
+        var validUserTokens = tokenRepository.findAllValidTokensByUser(user.getId());
+        if (validUserTokens.isEmpty()) return;
+
+        validUserTokens.forEach(token -> {
+            token.setExpired(true);
+            token.setRevoked(true);
+        });
+
+        tokenRepository.saveAll(validUserTokens);
     }
 
     public boolean isTokenValid(String token, UserDetails userDetails) {
